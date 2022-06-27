@@ -38,8 +38,8 @@ w17.M2 <- lmer(logRT ~ logwd_length:logadvfreq + verb_polarity + adv_polarity + 
 w17.M3 <- lmer(logRT ~ logwd_length:logadvfreq + verb_polarity * adv_polarity * target_pred + (1|subj), w17)
 w17.M4 <- lmer(logRT ~ logwd_length:logadvfreq + verb_polarity + adv_polarity * target_pred + (1|subj), w17) #Selected interactions model
 
-w17.M4invRT <- lmer(invRT ~ logwd_length + logverbfreq + logadvfreq:logtargetfreq + (1|subj)+(1|condition), w17) #Selected interactions model
-summary(w17.M4invRT)
+#w17.M4invRT <- lmer(invRT ~ logwd_length + logverbfreq + logadvfreq:logtargetfreq + (1|subj)+(1|condition), w17) #Inverted RTs model 
+#summary(w17.M4invRT)
 
 summary(w17.M0)
 summary(w17.M1)
