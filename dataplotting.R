@@ -38,7 +38,8 @@ data$wd_number <- factor(data$wd_number, levels = c("w1", "w2", "w3", "w4", "w5"
 
 data$subj <- factor(data$subj, levels = c("subj1", "subj2", "subj3", "subj4", "subj5", "subj6",
                                           "subj7", "subj8", "subj9", "subj10", "subj11", "subj12",
-                                          "subj13", "subj14", "subj15", "subj16", "subj17", "subj18"))
+                                          "subj13", "subj14", "subj15", "subj16", "subj17", "subj18",
+                                         "subj19", "subj20", "subj21", "subj22"))
 
 data$condition <- factor(data$condition, levels = c("A", "B", "C", "D", "E", "F",
                                                     "G", "H"))
