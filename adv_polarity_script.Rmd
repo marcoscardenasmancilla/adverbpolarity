@@ -1,0 +1,456 @@
+---
+output:
+  word_document: default
+  html_document: default
+  pdf_document: default
+---
+
+##Cargar paquetes de R:
+
+```{r include=FALSE}
+library(emmeans)
+library(broom.mixed)
+library(dotwhisker)
+library(foreign)
+library(intsvy)
+library(dplyr)
+library(tidyr)
+library(rms)
+library(lme4)
+library(lmerTest)
+library(GGally)
+library(lattice)
+library(mvoutlier)
+library(car)
+library(MASS) 
+library(sm)
+library(reshape)
+library(plyr)
+library(Hmisc)
+library(foreign) #- To read SPSS files
+library(mice)
+library(Rmisc)
+library(ggplot2)
+library(gridExtra)
+library(sjPlot) #- To create LMER object table
+library(merTools)
+```
+
+##Transformar variables en matrix de datos:
+
+```{r echo=TRUE}
+#create data frame with no outliers#
+data <- read.csv2("data_v8.csv", header = TRUE) #trimmed DF at AoI
+
+#scale vars#
+data$wd_number <- factor(data$wd_number, levels = c("w1", "w2", "w3", "w4", "w5", "w6",
+                                                                "w7", "w8", "w9", "w10", "w11", "w12",
+                                                                "w13", "w14", "w15", "w16", "w17"))
+
+data$subj <- factor(data$subj, levels = c("subj1", "subj2", "subj3", "subj4", "subj5", "subj6",
+                                                      "subj7", "subj8", "subj9", "subj10", "subj11", "subj12",
+                                                      "subj13", "subj14", "subj15", "subj16", "subj17", "subj18",
+                                          "subj19", "subj20", "subj21", "subj22"))
+
+data$condition <- factor(data$condition, levels = c("A", "B", "C", "D", "E", "F", "G", "H"))
+
+data$SUBJ <- as.numeric(data$subj, levels = c("1", "2", "3", "4", "5", "6",
+                                                          "7", "8", "9", "10", "11", "12",
+                                                          "13", "14", "15", "16", "17", "18", "19", "20", "21", "22"))
+
+data$COND <- as.numeric(data$condition, levels = c("1", "2", "3", "4", "5", "6", "7", "8"))
+
+data$verb_polarity <- factor(data$verb_polarity, levels = c("pos", "neg"))
+
+data$adv_polarity <- factor(data$adv_polarity, levels = c("pos", "neg"))
+
+data$target_pred <- factor(data$target_pred, levels = c("high", "low")) # target word predictability as CATEGORICAL var
+
+data$Target_pred <- as.numeric(data$target_pred, levels = c("high", "low"))
+
+data$Target_pred <- dplyr::recode(data$Target_pred, "1=0.5 ; 2=-0.5") # target word predictability as continuous var
+
+data[2] <- lapply(data[2], function(x) as.factor(as.character(x)))
+
+data[6] <- lapply(data[6], function(x) as.numeric(as.integer(x)))
+
+data$WD_length <- (data$wd_length*1000)
+
+data$logwd_length <- log(data$WD_length)
+
+data$center_wdlength <- scale(data$WD_length, center= TRUE, scale = FALSE)
+
+data$z_wdlength <- scale(data$WD_length, center= TRUE, scale = TRUE)
+
+hist(data$center_wdlength)
+
+hist(data$logwd_length)
+
+data[7] <- lapply(data[7], function(x) as.numeric(as.character(x)))
+
+data[11:14] <- lapply(data[11:14], function(x) as.numeric(as.character(x)))
+
+hist(data$rt)
+
+data$RT <- (data$rt*1000)
+
+hist(data$RT)
+
+data$logRT <- log10(data$RT)
+
+hist(data$logRT)
+
+data$zRT <- scale(data$RT, center= TRUE, scale = TRUE)
+```
+
+##Filtrar datos en sustantivo crítico:
+
+```{r echo=TRUE}
+w17 <- filter(data, wd_number %in% c("w17"))
+head(w17)
+hist(w17$logRT)
+
+#convert PREDICTABILITY to a factor variable#
+w17$target_pred <- factor(w17$target_pred, levels = c("high", "low")) # target word predictability as CATEGORICAL var
+
+#calculate Noun Cloze Predictability -log(cloze_index)
+w17$Cloze_pred <- (w17$cloze_pred*1000)
+hist(w17$Cloze_pred)
+w17$logCloze <- log(w17$cloze_pred)
+hist(w17$logCloze)
+```
+
+##Generar descriptivo de efecto de la interacción:
+
+```{r echo=TRUE}
+###Plot interactions###
+My_Theme = theme(
+  axis.title.x = element_text(size = 16),
+  axis.text.x = element_text(size = 14),
+  axis.title.y = element_text(size = 16),
+  plot.title = element_text(hjust = 0.5))
+
+pd <- position_dodge(0.2) # move them .05 to the left and right
+
+sum.target <- summarySE(w17, measurevar="RT", groupvars=c("target_pred", "adv_polarity"))
+target.plot <- ggplot(sum.target, aes(x=adv_polarity, y=RT, color = target_pred, fill = target_pred, group=target_pred)) + 
+  geom_errorbar(aes(ymin=RT-se, ymax=RT+se), size=1.2, colour="black", width=.2, position=pd) + 
+  geom_line(position=pd, size=1.2) +
+  geom_point(aes(), position=pd, size=5, fill="white") + # 21 is filled circle
+  scale_fill_hue(name="Predictibilidad", # Legend label, use darker colors
+                 breaks=c("high", "low"),
+                 labels=c("Alta", "Baja"),
+                 aesthetics = "colour") +
+  xlab("Polaridad adverbial") +
+  ylab("Tiempos de reacción") +
+  expand_limits(y=480:550) +                        # Expand y range
+  scale_y_continuous(breaks = seq(480, 550, by = 10)) +       # -10 y 10 Set tick every 2
+  scale_x_discrete(breaks=c("pos", "neg"),
+                   labels=c("Positiva", "Negativa")) +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(), axis.line = element_line(colour = "black"), 
+        legend.justification=c(1,0), legend.position=c(.95,0.05),
+        axis.text=element_text(size=12),
+        axis.title=element_text(size=14,face="bold"))
+target.plot + labs(title="Tiempos de reacción y error estándar promedio en interacciones")+
+  theme(plot.title = element_text(hjust = 0.5))
+dev.print(jpeg, "adverbpolarityw17.jpeg", res=900, height=8, width=16, units="in")
+```
+
+##Ejecutar función para estimación de media y SD de RT y predictibilidad por condición:
+
+```{r echo=TRUE}
+data_summary <- function(data, varname, groupnames){
+  require(plyr)
+  summary_func <- function(x, col){
+    c(mean = mean(x[[col]], na.rm=TRUE),
+      sd = sd(x[[col]], na.rm=TRUE))
+  }
+  data_sum<-ddply(data, groupnames, .fun=summary_func,
+                  varname)
+  data_sum <- rename(data_sum, c("mean" = varname))
+  return(data_sum)
+}
+
+w17.sum <- data_summary(w17, varname="RT", 
+                        groupnames=c("COND", "target_pred"))
+```
+
+##Calcular Desviación Estándar de la Media como barras de error:
+
+```{r echo=TRUE}
+p <- ggplot(w17.sum, aes(COND, RT, fill = target_pred)) +
+  geom_bar(stat="identity", position=position_dodge()) +
+  geom_errorbar(aes(ymin=RT-sd, ymax=RT+sd), width=.2,
+                position=position_dodge(.9))
+p + labs(title="Tiempos de reacción por condición", x="Condiciones", y = "RT",  fill =  "Predictibilidad")+
+  theme(plot.title = element_text(hjust = 0.5))
+dev.print(jpeg, "boxplot.w17.COND.jpeg", res=900, height=8, width=16, units="in")
+```
+
+##Preparar datos para descriptivo de gráfico de barras:
+
+```{r echo=TRUE}
+#+++++++++++++++++++++++++
+# Function to calculate the mean and the standard deviation
+# for each group
+#+++++++++++++++++++++++++
+# data : a data frame
+# varname : the name of a column containing the variable
+#to be summarized
+# groupnames : vector of column names to be used as
+# grouping variables
+data_summary <- function(data, varname, groupnames){
+  require(plyr)
+  summary_func <- function(x, col){
+    c(mean = mean(x[[col]], na.rm=TRUE),
+      sd = sd(x[[col]], na.rm=TRUE))
+  }
+  data_sum<-ddply(data, groupnames, .fun=summary_func,
+                  varname)
+  data_sum <- rename(data_sum, c("mean" = varname))
+  return(data_sum)
+}
+
+df3 <- data_summary(w17, varname="RT", 
+                    groupnames=c("COND", "target_pred"))
+
+# Convert Predictability to a factor variable
+df3$target_pred=as.factor(df3$target_pred)
+head(df3)
+```
+
+##Generar descriptivo de gráfico de barras:
+
+```{r echo=TRUE}
+condition.barplot <- ggplot(df3, aes(x=COND, y=RT, fill=target_pred)) + 
+  geom_bar(position=position_dodge(), stat="identity",
+           colour="black", # Use black outlines,
+           size=.3) +      # Thinner lines
+  geom_errorbar(aes(ymin=RT-sd, ymax=RT+sd),
+                size=.3,    # Thinner lines
+                width=.2,
+                position=position_dodge(.9)) +
+  xlab("Condición") +
+  ylab("Tiempos de reacción") +
+  scale_fill_hue(name="Predictibilidad", # Legend label, use darker colors
+                 breaks=c("high", "low"),
+                 labels=c("Alta", "Baja")) +
+  scale_y_continuous(breaks=seq(0, 1000, by = 50)) +
+  theme_bw()
+condition.barplot + labs(title="Tiempos de reacción promedio y desviación estándar por condición")+
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text=element_text(size=12),
+        axis.title=element_text(size=14,face="bold"))
+dev.print(jpeg, "boxplot.w17.COND.jpeg", res=900, height=8, width=16, units="in")
+```
+
+##Generar descriptivo de curso temporal de predictibilidad:
+
+```{r echo=TRUE}
+###plot interactions###
+pd <- position_dodge(0.1) # move them .05 to the left and right, # The errorbars overlapped, so use position_dodge to move them horizontally
+
+My_Theme = theme(
+  axis.title.x = element_text(size = 16),
+  axis.text.x = element_text(size = 16),
+  axis.title.y = element_text(size = 16),
+  axis.text.y = element_text(size = 16))
+
+data$clause <- data$condition
+levels(data$clause)[levels(data$clause)=="B"] <- "A"
+levels(data$clause)[levels(data$clause)=="D"] <- "C"
+levels(data$clause)[levels(data$clause)=="F"] <- "E"
+levels(data$clause)[levels(data$clause)=="H"] <- "G"
+
+w17A <- filter(data, clause %in% c("A")) #filter condition ADVPOS
+w17C <- filter(data, clause %in% c("C")) #filter condition ADVNEG
+w17AC <- rbind(w17A, w17C) #bind w17A and w17C
+
+w17SE <- summarySE(w17AC, measurevar="RT", groupvars=c("clause", "wd_number"))
+
+w17.plot <- ggplot(w17SE, aes(x=wd_number, y=RT, color = clause, fill = clause, group = clause)) + 
+  geom_errorbar(aes(ymin=RT-se, ymax=RT+se), size=1.2, colour="black", width=.2, position=pd) + 
+  geom_line(position=pd, size=1.2) +
+  geom_point(aes(), position=pd, size=5, fill="white") + # 21 is filled circle
+  scale_fill_hue(name="Polaridad adverbial", # Legend label, use darker colors
+                 breaks=c("A", "C"),
+                 labels=c("Positiva", "Negativa"),
+                 aesthetics = "colour") +
+  xlab("Número de posición de palabras") +
+  ylab("Tiempo de reacción") +
+  expand_limits(y=350:650) +                        # Expand y range
+  scale_y_continuous(breaks = seq(350, 650, by = 10)) +       # -10 y 10 Set tick every 2
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(), axis.line = element_line(colour = "black"), 
+        legend.justification=c(1,0), legend.position=c(.95,0.05),
+        axis.text=element_text(size=12),
+        axis.title=element_text(size=14,face="bold")) +
+  theme_bw()
+w17.plot + labs(title="Efecto de la polaridad adverbial en el procesamiento interclausular", x="Posición de palabra en el texto", y = "RT",  fill =  "Polaridad adverbial")+
+  theme(plot.title = element_text(hjust = 0.5))
+dev.print(jpeg, "advpolarityeffect.w17.jpeg", res=900, height=8, width=16, units="in")
+```
+
+##Ajustar objetos LMER:
+
+```{r echo=TRUE}
+w17.lmer0 <- lmer(logRT ~ logwd_length + target_pred + (1|SUBJ), w17) 
+w17.lmer1 <- lmer(logRT ~ logwd_length + adv_polarity + target_pred + (1|SUBJ), w17) 
+w17.lmer2 <- lmer(logRT ~ logwd_length + verb_polarity + (adv_polarity * target_pred) + (1|SUBJ), w17) #Selected interactions model
+summary(w17.lmer2)
+an <- anova(w17.lmer0, w17.lmer1, w17.lmer2)
+as.matrix(an)
+write.csv(an,"C:/Users/marco/Desktop/Tesis/Figuras_tesis/anova.csv", row.names = FALSE)
+```
+
+##Constrastar modelos ajustados según BayesTest (BF):
+
+```{r echo=TRUE}
+library(bayestestR)
+BF_target_models <- bayestestR::bayesfactor_models(w17.lmer0, w17.lmer1, w17.lmer2, denominator = w17.lmer0)
+BF_target_models
+update(BF_target_models, reference = 1)
+BF_target_models
+as.matrix(BF_target_models)
+effectsize::interpret_bf(exp(BF_target_models$log_BF[3]), include_value = TRUE)#Interpret BF for "target_M5" - "extreme evidence (BF = 1/233.06) against"
+write.csv(an,"C:/Users/marco/Desktop/Tesis/Figuras_tesis/BFmodel.csv", row.names = FALSE)
+```
+
+##Ejecutar "ggplotInfluence" para identificación de puntos influyentes en modelo seleccionado:
+
+```{r echo=TRUE}
+###Identify outliers in model###
+#fit "lm" object for model outlier identification#
+w17.lm <- lm(logRT ~ verb_polarity + adv_polarity:target_pred, w17) #linear model to Target NOUN, no random effects or interactions
+
+#identify outliers in fitted model#
+ggplotInfluence <- function (model, fill="grey", 
+                             outline="black", size=30) {
+  require(ggplot2)
+  if(!inherits(model, "lm")) 
+    stop("You need to supply an lm object.")
+  df<-data.frame(Residual=rstudent(model), 
+                 Leverage=hatvalues(model), 
+                 Cooks=cooks.distance(model), 
+                 Observation=names(hatvalues(model)), 
+                 stringsAsFactors=FALSE)
+  myxint<-c(2*mean(df$Leverage), 3*mean(df$Leverage))
+  inds<-intersect(which(abs(df$Residual) < 2), 
+                  which( df$Leverage < myxint[1]))
+  if(length(inds) > 0) df$Observation[inds]<-""
+  ggplot(df, aes_string(x='Leverage', y='Residual', 
+                        size='Cooks', label='Observation'), 
+         legend=FALSE) +
+    geom_point(colour=outline, fill=fill, shape=21) + 
+    scale_size_area(max_size=size) + 
+    theme_bw(base_size=16) + geom_text(size=4) + 
+    geom_hline(yintercept=c(2,-2), linetype="dashed") + 
+    geom_vline(xintercept=myxint, linetype="dashed") + 
+    ylab("Studentized Residuals") + 
+    xlab("Hat-Values") + labs(size="Cook's distance")
+  
+}
+ggplotInfluence(w17.lm) #outputs Cook's distance plot
+dev.print(jpeg, "Puntos influyentes según Distancia de Cook.jpeg", res=900, height=8, width=16, units="in")
+```
+
+##Simular datos para estimación de Intervalos de Predicción de modelo seleccionado:
+
+```{r echo=TRUE}
+###Calculate Prediction Intervals for Interactions LMER Model (w17.lmer)
+#Simulation-driven PI#
+w17[1,]
+PI.time <- system.time(
+  PI <- predictInterval(w17.lmer2, newdata = w17[1:597,], #specify LMER object and update vector value as per n of observations to simulate
+                        which = "fixed", level = 0.95, 
+                        n.sims = 2000, stat = "median", 
+                        type = "linear.prediction",
+                        include.resid.var = TRUE)
+)
+View(PI)
+tempdfSIM <- cbind(w17, PI) #simulation-driven temporal dataframe
+View(tempdfSIM)
+
+#Model-driven PI#
+PI.w17.lmer <- predictInterval(w17.lmer2, newdata = w17[1:597,], #specify LMER object and update vector value as per n of observations to simulate
+                              which = "fixed", level = 0.95, 
+                              n.sims = 2000, stat = "median", 
+                              type = "linear.prediction",
+                              include.resid.var = TRUE)
+View(PI.w17.lmer)
+tempdfMOD <- cbind(w17, PI.w17.lmer) #model-driven temporal dataframe
+View(tempdfMOD)
+
+#plot PI and keep only points that are outside the prediction interval#
+plotPointsMOD <- tempdfMOD[which(!(tempdfMOD$logRT > tempdfMOD$lwr & tempdfMOD$logRT < tempdfMOD$upr)),]
+plotPointsSIM <- tempdfSIM[which(!(tempdfSIM$logRT > tempdfSIM$lwr & tempdfSIM$logRT < tempdfSIM$upr)),]
+ggplot(data=plotPointsSIM, aes(x = Target_pred)) + geom_point(aes(y = fit), alpha = 0.5) + 
+  geom_ribbon(data=tempdfSIM, aes(ymin = lwr, ymax = upr), fill = "blue", alpha = 0.3) + #data = tempdf
+  labs(x="Target Word Predictability", y="Prediction w/ 95% PI")
+
+dev.print(jpeg, "PI.MOD.jpeg", res=900, height=8, width=16, units="in")
+dev.print(jpeg, "PI.SIM.jpeg", res=900, height=8, width=16, units="in")
+```
+
+##Estimar potencia de efectos de la interacción:
+
+```{r echo=TRUE}
+# prepare
+library(lme4)
+library(mixedpower)
+##fit mode (use numeric subject and item/condition identifier)
+w17$SUBJ <- as.numeric(w17$subj, levels = c("1", "2", "3", "4", "5", "6",
+                                               "7", "8", "9", "10", "11", "12",
+                                               "13", "14", "15", "16", "17", "18", "19", "20", "21", "22"))
+
+w17$COND <- as.numeric(w17$condition, levels = c("1", "2", "3", "4", "5", "6", "7", "8"))
+
+
+#Estimate power for interactions effect with mixedpower()
+#number of items (per condition) is explicitly set to 60
+#number of subjects (n = 22) is inferred from the data
+
+fit <- lmer(logRT ~ logwd_length + verb_polarity + (adv_polarity * target_pred) + (1|SUBJ), w17)
+summary(fit)
+
+# SIMULATION PARAMETERS
+steps <- c(40, 60, 80)
+critical_value <- 2
+n_sim <- 1000 
+fixed_effects <- c("logwd_length", "verb_polarity", "adv_polarity", "target_pred")
+simvar <- "SUBJ"
+
+# RUN SIMULATION
+power.effects  <- mixedpower(fit, w17,
+                          fixed_effects, simvar, steps,
+                          critical_value, n_sim,
+                          SESOI = F, databased = T)
+multiplotPower(power.effects)
+```
+
+##Ajuste y contraste de modelos ajustados a Cloze vs RT:
+
+```{r echo=TRUE}
+library(glmmTMB)
+
+#fit glmmTMB model to w17
+
+w17.glmmTMB_CLOZE <- glmmTMB(Cloze_pred ~ logwd_length + verb_polarity + (adv_polarity * target_pred) + (1|SUBJ), data=w17, ziformula=~0, family=Gamma(link = "log"))
+
+w17.glmmTMB_RT <- glmmTMB(RT ~ logwd_length + verb_polarity + (adv_polarity * target_pred) + (1|SUBJ), data=w17, ziformula=~0, family=Gamma(link = "log"))
+
+#model comparison report
+tab_model(
+  w17.glmmTMB_CLOZE, w17.glmmTMB_RT,
+  pred.labels = c("Intercepto", "(log)N Caracteres de Palabra", "Causalidad Verbal", "Polaridad Adverbial", "Predictibilidad", 
+                  "Polaridad Adverbial * Predictibilidad"),
+  dv.labels = c("Modelo ajustado a Probalidad Cloze", "Modelo ajustado a RT"),
+  string.est = "Estimado",
+  string.pred = "Coeficiente",
+  string.ci = "Int. Conf. (95%)",
+  string.p = "Valor P"
+)
+```
+
+
