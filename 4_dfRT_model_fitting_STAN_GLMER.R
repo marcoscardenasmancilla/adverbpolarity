@@ -32,7 +32,7 @@ df.spr$rt <- ifelse(df.spr$z_RT >= abs(2.5), NA, df.spr$RT)
 plyr::count(is.na(df.spr$rt))[[2,2]]/plyr::count(is.na(df.spr$rt))[[1,2]]
 #[1] 0.02300885
 
-##Filtrar datos en palabra cr�tica N5CRI:
+##Filtrar datos en palabra crítica N5CRI:
 
 w17 <- filter(df.spr, wd_number %in% c("17"))
 hist(w17$RT)
@@ -121,7 +121,7 @@ ppc_intervals(
   labs(
     x = "Predictibilidad RT",
     y = "Frecuencia Promedio de Futuras Observaciones",
-    title = "Intervalos de Predicción (PI 90%) \nvs Indice Cloze Calculado por Condición") + 
+    title = "Intervalos de PredicciÃ³n (PI 90%) \nvs Indice Cloze Calculado por CondiciÃ³n") + 
   panel_bg(fill = "gray95", color = NA) +
   grid_lines(color = "white") 
 
@@ -146,7 +146,7 @@ dev.print(jpeg, "1_pp_check_GLMER.jpeg", res=900, height=8, width=16, units="in"
 bayesplot::color_scheme_set("brightblue")
 fit_glm <- stan_glm(Freq ~ 0 + Var2,
                     data = df.cond,
-                    family = poisson(link="log"), #The Poisson distribution is defined by a single parameter, lambda (λ), which is the mean number of occurrences during an observation unit. A rate of occurrence is simply the mean count per standard observation period.
+                    family = poisson(link="log"), #The Poisson distribution is defined by a single parameter, lambda (Î»), which is the mean number of occurrences during an observation unit. A rate of occurrence is simply the mean count per standard observation period.
                     cores = 5,
                     chains = 10, 
                     iter = 10000,
